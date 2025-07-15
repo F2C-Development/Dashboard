@@ -54,12 +54,12 @@ def update_dashboard(selected_city, filter_eligibility):
     city = cidades[cidades["Município [-]"] == selected_city].iloc[0]
 
     # City info text
-    city_text = f"Divída Consolidada: {city.DC:,} | Renda Corrente Líquida: {city.RCL:,}"
+    city_text = f"Divída Consolidada: {city['DC [2024]']:,} | Renda Corrente Líquida: {city['RCL [2024]']:,}"
 
     # Determine eligibility for each fund
     def check_eligibility(row):
-        pop_ok = city.DC >= row.min_dc
-        gdp_ok = city.RCL <= row.max_rcl
+        pop_ok = city['DC [2024]'] >= row.min_dc
+        gdp_ok = city['RCL [2024]'] <= row.max_rcl
         return pop_ok and gdp_ok
 
     funds["eligible"] = funds.apply(check_eligibility, axis=1)
