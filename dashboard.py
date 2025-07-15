@@ -20,7 +20,7 @@ app.layout = html.Div(style={"fontFamily": "Arial, sans-serif", "maxWidth": "600
     # City selector
     dcc.Dropdown(
         id="city-dropdown",
-        options=[{"label": c, "value": c} for c in cidades["Nome"]],
+        options=[{"label": c, "value": c} for c in cidades["Município [-]"]],
         value="São Paulo",
         clearable=False,
     ),
@@ -51,7 +51,7 @@ app.layout = html.Div(style={"fontFamily": "Arial, sans-serif", "maxWidth": "600
     Input("eligibility-filter", "value"),
 )
 def update_dashboard(selected_city, filter_eligibility):
-    city = cidades[cidades["Nome"] == selected_city].iloc[0]
+    city = cidades[cidades["Município [-]"] == selected_city].iloc[0]
 
     # City info text
     city_text = f"Divída Consolidada: {city.DC:,} | Renda Corrente Líquida: {city.RCL:,}"
