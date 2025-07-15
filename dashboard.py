@@ -14,7 +14,7 @@ funds = pd.DataFrame([
 # Initialize app
 app = dash.Dash(__name__)
 
-app.layout = html.Div(style={"fontFamily": "Arial, sans-serif", "maxWidth": "600px", "margin": "auto"}, children=[
+app.layout = html.Div(style={"fontFamily": "Arial, sans-serif", "maxWidth": "600px", "margin": "left"}, children=[
     html.H1("Funds2Cities"),
 
     # City selector
