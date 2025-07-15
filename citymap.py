@@ -8,7 +8,7 @@ app = dash.Dash(__name__)
 server = app.server
 
 # 1. Carregar dados financeiros
-dados = pd.read_csv("sincofi.txt")
+dados = pd.read_csv("siconfi.txt")
 
 # 2. Carregar GeoJSON
 with open('br_states.json', 'r', encoding='utf-8') as f:
@@ -124,7 +124,7 @@ def update_info(click_data):
         nome_estado = click_data['geometry_name']
         
         # Filtra municípios do estado
-        municipios = dados[dados['UF'] == sigla].sort_values('Nome')
+        municipios = dados[dados['UF [-]'] == sigla].sort_values('Município [-]')
         
         if municipios.empty:
             return html.Div([
@@ -144,17 +144,17 @@ def update_info(click_data):
         lista_itens = []
         for _, row in municipios.iterrows():
             elegivel = False
-            if 'RCL' in row:
+            if 'RCL [-]' in row:
                 try:
-                    elegivel = float(row['RCL']) >= 100000000000
+                    elegivel = float(row['RCL [-]']) >= 100000000000
                 except:
                     elegivel = False
             
             item = html.Li([
-                html.Strong(row['Nome'], style={'fontFamily': 'Inter, sans-serif', 'fontSize': '15px'}),
+                html.Strong(row['Município [-]'], style={'fontFamily': 'Inter, sans-serif', 'fontSize': '15px'}),
                 html.Br(),
-                (f"DC: R${float(row['DC']):,.2f} | " if 'DC' in row else ""),
-                (f"RCL: R${float(row['RCL']):,.2f}" if 'RCL' in row else ""),
+                (f"DC: R${float(row['DC [-]']):,.2f} | " if 'DC [-]' in row else ""),
+                (f"RCL: R${float(row['RCL [-]']):,.2f}" if 'RCL [-]' in row else ""),
                 html.Br(),
                 html.Span(
                     "✅ Elegível" if elegivel else "❌ Não elegível",
