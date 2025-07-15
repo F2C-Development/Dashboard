@@ -3,7 +3,7 @@ from dash import html, dcc, Input, Output
 import pandas as pd
 
 # Example mock data
-cidades=pd.read_csv('sincofi.txt')
+cidades=pd.read_csv('siconfi.txt')
 
 funds = pd.DataFrame([
     {"fund": "Fundo A", "min_dc": 10000000000, "max_rcl": 100000000000},
