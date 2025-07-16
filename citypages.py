@@ -1,8 +1,12 @@
 import dash
-from dash import html, dcc, Input, Output
+from dash import html, dcc, Input, Output, callback, State
 import pandas as pd
 from urllib.parse import unquote
 import numpy as np
+
+import dash_leaflet as dl
+import json
+
 
 ## 1. Função de Carregamento de Dados Otimizada
 def load_data():
@@ -97,34 +101,156 @@ def home_page():
     ])
 
 def city_page(city_name):
-    data = CITIES_DATA.get(city_name)
-    if not data:
+    dados = CITIES_DATA.get(city_name)
+    if not dados:
         return html.Div([
             html.H1("Cidade não encontrada"),
             html.A("Voltar", href="/")
         ], style={'textAlign': 'center'})
-    
+
+    # Dicionário que mapeia os 2 primeiros dígitos do código IBGE para a UF
+    codigo_para_uf = {
+        11: "RO", 12: "AC", 13: "AM", 14: "RR", 15: "PA", 16: "AP", 17: "TO",
+        21: "MA", 22: "PI", 23: "CE", 24: "RN", 25: "PB", 26: "PE", 27: "AL", 28: "SE", 29: "BA",
+        31: "MG", 32: "ES", 33: "RJ", 35: "SP",
+        41: "PR", 42: "SC", 43: "RS",
+        50: "MS", 51: "MT", 52: "GO", 53: "DF"
+    }
+
+    citycode = dados['basic']['Código']
+    codigo_estado = int(str(citycode)[:2])
+    uf = codigo_para_uf.get(codigo_estado, "Desconhecido")
+
+    # Carrega o GeoJSON do estado
+    with open(f'cityjsons/{uf}.json', 'r', encoding='utf-8') as f:
+        estado_geojson = json.load(f)
+
+    # Extrai a feature da cidade específica do GeoJSON do estado
+    cidade_feature = None
+    for feature in estado_geojson['features']:
+        if feature['properties']['id'] == str(citycode):
+            cidade_feature = {
+                "type": "FeatureCollection",
+                "features": [feature]
+            }
+            break
+
+    # Configuração do centro do mapa (usando o primeiro ponto do polígono da cidade se disponível)
+    center = dados.get('coordinates', [-15.7, -47.8])  # Fallback para Brasília
+    if cidade_feature and cidade_feature['features'][0]['geometry']['coordinates']:
+        # Pega o primeiro ponto do primeiro polígono (ajuste conforme seu GeoJSON)
+        first_point = cidade_feature['features'][0]['geometry']['coordinates'][0][0]
+        center = [first_point[1], first_point[0]]  # Inverte lat/long se necessário
+
+    # Criação do mapa
+    mapa = dl.Map(
+        center=center,
+        zoom=8,  # Zoom mais próximo para destacar a região
+        children=[
+            #dl.TileLayer(),  # Adiciona mapa base
+            dl.GeoJSON(
+                id="estado-geojson",
+                data=estado_geojson,
+                style={
+                    "weight": 1,
+                    "color": "#4a4a4a",
+                    "fillOpacity": 0.3,
+                    "fillColor": "#6baed6"
+                },
+                hoverStyle={
+                    "weight": 2,
+                    "color": "#222",
+                    "fillOpacity": 0.5
+                }
+            ),
+            # Adiciona a cidade destacada se encontrada no GeoJSON do estado
+            *([dl.GeoJSON(
+                id="cidade-geojson",
+                data=cidade_feature,
+                style={
+                    "weight": 2,
+                    "color": "#d62728",
+                    "fillOpacity": 0.7,
+                    "fillColor": "#d62728"
+                },
+                zoomToBounds=True  # Ajusta o zoom para a cidade
+            )] if cidade_feature else []),
+            # Adiciona marcador como fallback se não encontrar a cidade no GeoJSON
+            *([dl.Marker(
+                position=center,
+                children=[
+                    dl.Tooltip(city_name),
+                    dl.Popup(city_name)
+                ]
+            )] if not cidade_feature else [])
+        ],
+        style={
+            'height': '60vh',
+            'width': '100%',
+            'margin': '20px 0',
+            'borderRadius': '10px',
+            'boxShadow': '0 4px 8px rgba(0,0,0,0.1)',
+            'background': 'lightgrey'
+        }
+    )
+
     return html.Div([
-        html.A("← Voltar", href="/", style={'margin': '20px'}),
-        html.H1(city_name, style={'textAlign': 'center'}),
+        html.A("← Voltar", href="/", style={
+            'margin': '20px',
+            'display': 'inline-block',
+            'textDecoration': 'none',
+            'color': '#0074D9',
+            'fontWeight': 'bold'
+        }),
         
         html.Div([
-            html.H2("Informações Básicas"),
-            html.P(f"Código: {data['basic']['Código']}"),
-            html.P(f"Gentílico: {data['basic']['Gentílico']}"),
-            html.P(f"Prefeito: {data['basic']['Prefeito']}"),
+            html.H1(city_name, style={'textAlign': 'center', 'marginBottom': '30px'}),
             
-            html.H2("Dados Demográficos"),
-            html.P(f"Área: {format_value(data['demographic']['Área'])} km²"),
-            html.P(f"População: {format_value(data['demographic']['População'])}"),
-            html.P(f"Densidade: {format_value(data['demographic']['Densidade'])} hab/km²"),
-            html.P(f"IDHM: {format_value(data['demographic']['IDHM'])}"),
-            
-            html.H2("Indicadores Econômicos"),
-            html.P(f"PIB per capita: R$ {format_value(data['economic']['PIB'])}"),
-            html.P(f"Receitas: R$ {format_value(data['economic']['Receitas'])}"),
-            html.P(f"Despesas: R$ {format_value(data['economic']['Despesas'])}")
-        ], style={'maxWidth': '800px', 'margin': '0 auto'})
+            # Layout principal com duas colunas
+            html.Div([
+                # Coluna esquerda - Informações
+                html.Div([
+                    # Seção de Informações Básicas
+                    html.Div([
+                        html.H2("Informações Básicas"),
+                        html.P(f"Código IBGE: {citycode}"),
+                        html.P(f"Gentílico: {dados['basic']['Gentílico']}"),
+                        html.P(f"Prefeito: {dados['basic']['Prefeito']}"),
+                    ], style={'marginBottom': '30px'}),
+                    
+                    # Seção de Dados Demográficos
+                    html.Div([
+                        html.H2("Dados Demográficos"),
+                        html.P(f"Área: {format_value(dados['demographic']['Área'])} km²"),
+                        html.P(f"População: {format_value(dados['demographic']['População'])}"),
+                        html.P(f"Densidade: {format_value(dados['demographic']['Densidade'])} hab/km²"),
+                        html.P(f"IDHM: {format_value(dados['demographic']['IDHM'])}"),
+                    ], style={'marginBottom': '30px'}),
+                    
+                    # Seção de Indicadores Econômicos
+                    html.Div([
+                        html.H2("Indicadores Econômicos"),
+                        html.P(f"PIB per capita: R$ {format_value(dados['economic']['PIB'])}"),
+                        html.P(f"Receitas: R$ {format_value(dados['economic']['Receitas'])}"),
+                        html.P(f"Despesas: R$ {format_value(dados['economic']['Despesas'])}")
+                    ])
+                ], style={'flex': '1', 'padding': '0 20px'}),
+                
+                # Coluna direita - Mapa
+                html.Div([
+                    mapa
+                ], style={'flex': '1', 'padding': '0 20px'})
+            ], style={
+                'display': 'flex',
+                'gap': '30px',
+                'maxWidth': '1400px',
+                'margin': '0 auto'
+            })
+        ], style={
+            'maxWidth': '1400px',
+            'margin': '0 auto',
+            'padding': '20px'
+        })
     ])
 
 @app.callback(
