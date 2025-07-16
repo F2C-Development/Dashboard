@@ -1,0 +1,60 @@
+import pandas as pd
+
+    
+## 1. Função de Carregamento de Dados Otimizada
+def load_data():
+    # Carrega sem conversão inicial para identificar problemas
+    df = pd.read_csv('../ibge.txt')
+    
+    # Lista de colunas e seus tipos esperados
+    columns_spec = {
+        'Município [-]': 'category',
+        'Código [-]': 'str',
+        'Gentílico [-]': 'category',
+        'Prefeito [2025]': 'category',
+        'Área Territorial - km² [2024]': 'float32',
+        'População no último censo - pessoas [2022]': 'float32',
+        'Densidade demográfica - hab/km² [2022]': 'float32',
+        'População estimada - pessoas [2024]': 'float32',
+        'IDHM (Índice de desenvolvimento humano municipal) [2010]': 'float32',
+        'PIB per capita - R$ [2021]': 'float32',
+        'Total de receitas brutas realizadas - R$ [2024]': 'float64',
+        'Total de despesas brutas empenhadas - R$ [2024]': 'float64'
+    }
+    
+    # Converte colunas gradualmente com tratamento de erros
+    for col, dtype in columns_spec.items():
+        if dtype.startswith('float'):
+            # Substitui vírgulas por pontos e converte
+            df[col] = df[col].astype(str).str.replace(',', '.')
+            # Converte para numérico, forçando inválidos para NaN
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
+        else:
+            df[col] = df[col].astype(dtype)
+    
+    # Pré-processa os dados para formato rápido de acesso
+    cities_list = df['Município [-]'].unique().tolist()
+    cities_data = {}
+    
+    for city in cities_list:
+        city_data = df[df['Município [-]'] == city].iloc[0]
+        cities_data[city] = {
+            'basic': {
+                'Código': city_data['Código [-]'],
+                'Gentílico': city_data['Gentílico [-]'],
+                'Prefeito': city_data['Prefeito [2025]']
+            },
+            'demographic': {
+                'Área': city_data['Área Territorial - km² [2024]'],
+                'População': city_data['População no último censo - pessoas [2022]'],
+                'Densidade': city_data['Densidade demográfica - hab/km² [2022]'],
+                'IDHM': city_data['IDHM (Índice de desenvolvimento humano municipal) [2010]']
+            },
+            'economic': {
+                'PIB': city_data['PIB per capita - R$ [2021]'],
+                'Receitas': city_data['Total de receitas brutas realizadas - R$ [2024]'],
+                'Despesas': city_data['Total de despesas brutas empenhadas - R$ [2024]']
+            }
+        }
+    
+    return cities_list, cities_data
