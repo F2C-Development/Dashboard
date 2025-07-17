@@ -7,7 +7,11 @@ import numpy as np
 import dash_leaflet as dl
 import json
 
+import datetime
+from data_export import cities_list, cities_dict
 
+
+'''
 ## 1. Função de Carregamento de Dados Otimizada
 def load_data():
     # Carrega sem conversão inicial para identificar problemas
@@ -68,6 +72,9 @@ def load_data():
 
 ## 2. Carrega os dados uma única vez
 CITIES_LIST, CITIES_DATA = load_data()
+'''
+
+CITIES_LIST, CITIES_DATA = cities_list, cities_dict
 
 ## 3. Função de formatação otimizada
 def format_value(value):
