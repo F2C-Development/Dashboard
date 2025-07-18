@@ -424,13 +424,19 @@ def city_page(city_name):
                     }),
                     html.Span(f"Gentílico: {dados['basic']['Gentílico'].lower()}", style={
                         'color': '#555',
+                        'marginRight': '20px',
                         'fontWeight': '300',
                         'fontFamily': '"Roboto", sans-serif',
-                    })
+                    }),
+                    html.Span(f"Estado: {uf}", style={
+                        'color': '#555',
+                        'fontWeight': '300',
+                        'fontFamily': '"Roboto", sans-serif',
+                    }),
                 ], style={'marginBottom': '15px'}),
                 
                 html.Div([
-                    html.Span(f"Prefeito: {dados['basic']['Prefeito']}", style={
+                    html.Span(f"Prefeito: {dados['basic']['Prefeito'].title()}", style={
                         'color': '#333',
                         'fontFamily': '"Roboto", sans-serif',
                     })
