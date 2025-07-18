@@ -61,8 +61,8 @@ def load_data():
             },
             'economic': {
                 'PIB': format_value(city_data['PIB per capita - R$ [2021]']),
-                'Receitas': format_value(city_data['Total de receitas brutas realizadas - R$ [2024]']),
-                'Despesas': format_value(city_data['Total de despesas brutas empenhadas - R$ [2024]'])
+                'Receitas': city_data['Total de receitas brutas realizadas - R$ [2024]'],
+                'Despesas': city_data['Total de despesas brutas empenhadas - R$ [2024]']
             }
         }
     

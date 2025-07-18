@@ -4,6 +4,7 @@ import pandas as pd
 from urllib.parse import unquote
 import json
 import dash_leaflet as dl
+from data_export import cities_dict,cities_list
 
 ## 1. Função de Carregamento de Dados (Original)
 def load_data():
