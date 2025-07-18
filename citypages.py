@@ -74,9 +74,17 @@ def load_data():
 CITIES_LIST, CITIES_DATA = load_data()
 '''
 
+funds = pd.DataFrame([
+    {"fund": "Fundo A", "min_dc": 10000000000, "max_rcl": 100000000000},
+    {"fund": "Fundo B", "min_dc": 20000000000, "max_rcl": 100000000000},
+    {"fund": "Fundo C", "min_dc": 5000000000, "max_rcl": 10000000000},
+])
+
+cidades = pd.read_csv('siconfi.txt')
+
 CITIES_LIST, CITIES_DATA = cities_list, cities_dict
 
-## 3. Função de formatação otimizada
+'''## 3. Função de formatação otimizada
 def format_value(value):
     if pd.isna(value):
         return "N/D"
@@ -84,7 +92,7 @@ def format_value(value):
         if value >= 1000:
             return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         return f"{value:.2f}"
-    return str(value)
+    return str(value)'''
 
 ## 4. Aplicativo Dash Otimizado
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -154,7 +162,7 @@ def city_page(city_name):
         center=center,
         zoom=8,  # Zoom mais próximo para destacar a região
         children=[
-            #dl.TileLayer(),  # Adiciona mapa base
+            dl.TileLayer(),  # Adiciona mapa base
             dl.GeoJSON(
                 id="estado-geojson",
                 data=estado_geojson,
@@ -196,10 +204,10 @@ def city_page(city_name):
             'width': '100%',
             'margin': '20px 0',
             'borderRadius': '10px',
-            'boxShadow': '0 4px 8px rgba(0,0,0,0.1)',
-            'background': 'lightgrey'
+            'boxShadow': '0 4px 8px rgba(0,0,0,0.1)'
         }
     )
+
 
     return html.Div([
         html.A("← Voltar", href="/", style={
@@ -228,18 +236,18 @@ def city_page(city_name):
                     # Seção de Dados Demográficos
                     html.Div([
                         html.H2("Dados Demográficos"),
-                        html.P(f"Área: {format_value(dados['demographic']['Área'])} km²"),
-                        html.P(f"População: {format_value(dados['demographic']['População'])}"),
-                        html.P(f"Densidade: {format_value(dados['demographic']['Densidade'])} hab/km²"),
-                        html.P(f"IDHM: {format_value(dados['demographic']['IDHM'])}"),
+                        html.P(f"Área: {dados['demographic']['Área']} km²"),
+                        html.P(f"População: {dados['demographic']['População']}"),
+                        html.P(f"Densidade: {dados['demographic']['Densidade']} hab/km²"),
+                        html.P(f"IDHM: {dados['demographic']['IDHM']}"),
                     ], style={'marginBottom': '30px'}),
                     
                     # Seção de Indicadores Econômicos
                     html.Div([
                         html.H2("Indicadores Econômicos"),
-                        html.P(f"PIB per capita: R$ {format_value(dados['economic']['PIB'])}"),
-                        html.P(f"Receitas: R$ {format_value(dados['economic']['Receitas'])}"),
-                        html.P(f"Despesas: R$ {format_value(dados['economic']['Despesas'])}")
+                        html.P(f"PIB per capita: R$ {dados['economic']['PIB']}"),
+                        html.P(f"Receitas: R$ {dados['economic']['Receitas']}"),
+                        html.P(f"Despesas: R$ {dados['economic']['Despesas']}")
                     ])
                 ], style={'flex': '1', 'padding': '0 20px'}),
                 
@@ -257,18 +265,37 @@ def city_page(city_name):
             'maxWidth': '1400px',
             'margin': '0 auto',
             'padding': '20px'
-        })
-    ])
+        }),
+        html.Div(style={'fontFamily': 'Inter, sans-serif', "maxWidth": "600px", "margin": "left"}, children=[
+            html.H2(id="city-info"),
+
+            # Filter eligibility
+            dcc.RadioItems(
+                id="eligibility-filter",
+                options=[
+                    {"label": "Todos os fundos", "value": "all"},
+                    {"label": "Apenas fundos elegíveis", "value": "eligible"},
+                    {"label": "Apenas fundos não elegíveis", "value": "not_eligible"},
+                ],
+                value="all",
+                inline=True,
+                style={"marginTop": "10px"},
+            ),
+
+            html.Div(id="fund-list", style={"marginTop": "20px"}),
+            ])
+        ])
 
 @app.callback(
     Output('url', 'pathname'),
     Input({'type': 'city-btn', 'index': dash.ALL}, 'n_clicks'),
     prevent_initial_call=True
+    # Callback to update city info and funds eligibility
 )
 def navigate(clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return no_update
+        return None
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     city_idx = eval(button_id)['index']
@@ -284,6 +311,51 @@ def display_page(pathname):
     
     city_name = unquote(pathname[1:])
     return city_page(city_name)
+
+# Callback to update city info and funds eligibility
+@app.callback(
+    Output("city-info", "children"),
+    Output("fund-list", "children"),
+    Input("url", "pathname"),
+    Input("eligibility-filter", "value"),
+)
+def update_dashboard(pathname, filter_eligibility):
+    selected_city=unquote(pathname[1:])
+    city = cidades[cidades["Município [-]"] == selected_city].iloc[0]
+
+    # City info text
+    city_text = f"Divída Consolidada: {city['DC [2024]']:,} | Renda Corrente Líquida: {city['RCL [2024]']:,}"
+
+    # Determine eligibility for each fund
+    def check_eligibility(row):
+        pop_ok = city['DC [2024]'] >= row.min_dc
+        gdp_ok = city['RCL [2024]'] <= row.max_rcl
+        return pop_ok and gdp_ok
+
+    funds["eligible"] = funds.apply(check_eligibility, axis=1)
+
+    # Filter funds based on user choice
+    if filter_eligibility == "eligible":
+        filtered = funds[funds["eligible"]]
+    elif filter_eligibility == "not_eligible":
+        filtered = funds[~funds["eligible"]]
+    else:
+        filtered = funds
+
+    # Build fund list elements
+    fund_items = []
+    for _, fund in filtered.iterrows():
+        color = "green" if fund.eligible else "red"
+        fund_items.append(html.Div([
+            html.Strong(fund.fund, style={"color": color}),
+            html.Span(f" (DC Min: {fund.min_dc:,}, RCL Max: {fund.max_rcl:,})",
+                      style={"marginLeft": "8px", "color": "#555"}),
+        ], style={"padding": "6px 0", "borderBottom": "1px solid #eee"}))
+
+    if not fund_items:
+        fund_items = [html.Em("Nenhum fundo corresponde ao filtro selecionado.")]
+
+    return city_text, fund_items
 
 if __name__ == '__main__':
     app.run(debug=True)
