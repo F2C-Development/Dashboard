@@ -1,24 +1,14 @@
 import dash
-from dash import html, dcc, Input, Output, callback, State
+from dash import html, dcc, Input, Output, callback
 import pandas as pd
 from urllib.parse import unquote
-import numpy as np
-
-import dash_leaflet as dl
 import json
+import dash_leaflet as dl
 
-import datetime
-from data_export import cities_list, cities_dict
-from functools import lru_cache
-
-
-'''
-## 1. Função de Carregamento de Dados Otimizada
+## 1. Função de Carregamento de Dados (Original)
 def load_data():
-    # Carrega sem conversão inicial para identificar problemas
     df = pd.read_csv('ibge.txt')
     
-    # Lista de colunas e seus tipos esperados
     columns_spec = {
         'Município [-]': 'category',
         'Código [-]': 'str',
@@ -34,17 +24,13 @@ def load_data():
         'Total de despesas brutas empenhadas - R$ [2024]': 'float64'
     }
     
-    # Converte colunas gradualmente com tratamento de erros
     for col, dtype in columns_spec.items():
         if dtype.startswith('float'):
-            # Substitui vírgulas por pontos e converte
             df[col] = df[col].astype(str).str.replace(',', '.')
-            # Converte para numérico, forçando inválidos para NaN
             df[col] = pd.to_numeric(df[col], errors='coerce').astype(dtype)
         else:
             df[col] = df[col].astype(dtype)
     
-    # Pré-processa os dados para formato rápido de acesso
     cities_list = df['Município [-]'].unique().tolist()
     cities_data = {}
     
@@ -60,6 +46,7 @@ def load_data():
                 'Área': city_data['Área Territorial - km² [2024]'],
                 'População': city_data['População no último censo - pessoas [2022]'],
                 'Densidade': city_data['Densidade demográfica - hab/km² [2022]'],
+                'População_Estimada': city_data['População estimada - pessoas [2024]'],
                 'IDHM': city_data['IDHM (Índice de desenvolvimento humano municipal) [2010]']
             },
             'economic': {
@@ -71,62 +58,229 @@ def load_data():
     
     return cities_list, cities_data
 
-## 2. Carrega os dados uma única vez
+## 2. Carrega os dados
 CITIES_LIST, CITIES_DATA = load_data()
-'''
 
-
-import os
-from glob import glob
-
-GEOJSONS = {}
-for path in glob("cityjsons/*.json"):
-    uf = os.path.basename(path).split(".")[0]
-    with open(path, encoding="utf-8") as f:
-        GEOJSONS[uf] = json.load(f)
-estado_geojson = GEOJSONS.get(uf)
-
-funds = pd.DataFrame([
-    {"fund": "Fundo A", "min_dc": 10000000000, "max_rcl": 100000000000},
-    {"fund": "Fundo B", "min_dc": 20000000000, "max_rcl": 100000000000},
-    {"fund": "Fundo C", "min_dc": 5000000000, "max_rcl": 10000000000},
-])
-
-cidades = pd.read_csv('siconfi.txt')
-
-CITIES_LIST, CITIES_DATA = cities_list, cities_dict
-
-'''## 3. Função de formatação otimizada
+## 3. Função de formatação (Original)
 def format_value(value):
     if pd.isna(value):
         return "N/D"
     if isinstance(value, (int, float)):
+        if value == int(value):
+            value = int(value)
         if value >= 1000:
-            return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        return f"{value:.2f}"
-    return str(value)'''
+            return f"{value:,.0f}".replace(",", ".")
+        return f"{value}"
+    return str(value)
 
-## 4. Aplicativo Dash Otimizado
-app = dash.Dash(__name__, suppress_callback_exceptions=True)
-#app = dash.Dash(__name__, suppress_callback_exceptions=True, service_worker=True)  # Habilita PWA
-#app.enable_dev_tools(service_worker=True)
+## 4. Aplicativo Dash com Estilo IBGE
+app = dash.Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=[
+    {'href': 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap', 'rel': 'stylesheet'}
+])
+
 server = app.server
 
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
-    html.Div(id='page-content')
+    html.Div(id='page-content'),
+    # Estilos globais
+    html.Div(style={
+        'fontFamily': '"Roboto", sans-serif',
+        'color': '#333',
+        'margin': '0',
+        'minHeight': '100vh'
+    })
 ])
 
 def home_page():
     return html.Div([
-        html.H1("Selecione uma Cidade", style={'textAlign': 'center'}),
-        html.Div(
-            [html.Button(city, 
-                        id={'type': 'city-btn', 'index': i},
-                        style={'display': 'block', 'width': '100%', 'margin': '5px 0'})
-             for i, city in enumerate(CITIES_LIST)],
-            style={'height': '80vh', 'overflowY': 'auto', 'maxWidth': '600px', 'margin': '0 auto'}
-        )
+        # Barra superior (mesmo estilo das páginas de cidade)
+        html.Div([
+            html.Span("Funds2", style={
+                'color': 'white',
+                'fontWeight': 'bold',
+                'fontFamily': '"Roboto", sans-serif',
+                'fontSize': '30px'
+            }),
+            html.Span("Cities", style={
+                'color': 'white',
+                'fontFamily': '"Roboto", sans-serif',
+                'fontSize': '30px'
+            }),
+        ], style={
+            'padding': '15px 30px',
+            'borderBottom': '1px solid #ddd',
+            'backgroundColor': 'rgb(7, 29, 75)',
+            'marginBottom': '0',
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'center'
+        }),
+        
+        # Container principal
+        html.Div([
+            # Coluna da lista de cidades (esquerda)
+            html.Div([
+                html.H1("Selecione uma Cidade", style={
+                    'color': 'rgb(27, 119, 155)',
+                    'fontSize': '28px',
+                    'marginBottom': '20px',
+                    'fontWeight': 'bold',
+                    'fontFamily': '"Roboto", sans-serif',
+                }),
+                
+                html.Div(
+                    [html.Button(city, 
+                                id={'type': 'city-btn', 'index': i},
+                                style={
+                                    'display': 'block',
+                                    'width': '100%',
+                                    'padding': '12px 15px',
+                                    'margin': '8px 0',
+                                    'border': '1px solid #ddd',
+                                    'backgroundColor': '#fff',
+                                    'color': '#333',
+                                    'fontWeight': '400',
+                                    'borderRadius': '4px',
+                                    'cursor': 'pointer',
+                                    'textAlign': 'left',
+                                    'transition': 'all 0.3s',
+                                    'fontFamily': '"Roboto", sans-serif',
+                                    ':hover': {
+                                        'backgroundColor': '#f0f7ff',
+                                        'borderColor': '#1351B4',
+                                        'transform': 'translateY(-2px)'
+                                    }
+                                })
+                     for i, city in enumerate(CITIES_LIST)],
+                    style={
+                        'maxHeight': '70vh',
+                        'overflowY': 'auto',
+                        'paddingRight': '10px'
+                    }
+                )
+            ], style={
+                'flex': '1',
+                'padding': '30px',
+                'borderRight': '1px solid #ddd',
+                'backgroundColor': 'rgb(230, 230, 230)',
+                'marginRight': '30px'
+            }),
+            
+            # Coluna de instruções (direita)
+            html.Div([
+                html.Div([
+                    html.H2("Como usar", style={
+                        'color': 'rgb(27, 119, 155)',
+                        'borderBottom': '2px solid rgb(27, 119, 155)',
+                        'paddingBottom': '5px',
+                        'marginBottom': '20px',
+                        'fontSize': '24px',
+                        'fontWeight': 'bold',
+                        'fontFamily': '"Roboto", sans-serif'
+                    }),
+                    
+                    html.Div([
+                        html.P("1. Selecione uma cidade na lista ao lado", style={
+                            'color': '#555',
+                            'marginBottom': '15px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("2. Visualize os dados completos do município", style={
+                            'color': '#555',
+                            'marginBottom': '15px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("3. Verifique os fundos disponíveis para a cidade", style={
+                            'color': '#555',
+                            'marginBottom': '15px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("4. Os ícones ✅ indicam verbas que a cidade se enquadra", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("5. Os ícones ❌ indicam verbas não disponíveis", style={
+                            'color': '#555',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        })
+                    ], style={
+                        'padding': '20px',
+                        'backgroundColor': '#fff',
+                        'borderRadius': '8px',
+                        'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+                    })
+                ], style={
+                    'marginBottom': '30px'
+                }),
+                
+                html.Div([
+                    html.H2("Critérios para Fundos", style={
+                        'color': 'rgb(27, 119, 155)',
+                        'borderBottom': '2px solid rgb(27, 119, 155)',
+                        'paddingBottom': '5px',
+                        'marginBottom': '20px',
+                        'fontSize': '24px',
+                        'fontWeight': 'bold',
+                        'fontFamily': '"Roboto", sans-serif'
+                    }),
+                    
+                    html.Div([
+                        html.P("Verba Exemplo A:", style={
+                            'color': '#333',
+                            'fontWeight': '500',
+                            'marginBottom': '5px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        html.P("Receitas brutas > R$ 170.000", style={
+                            'color': '#555',
+                            'marginBottom': '15px',
+                            'fontSize': '16px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("Verba Exemplo B:", style={
+                            'color': '#333',
+                            'fontWeight': '500',
+                            'marginBottom': '5px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        html.P("Despesas brutas < R$ 150.000", style={
+                            'color': '#555',
+                            'fontSize': '16px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        })
+                    ], style={
+                        'padding': '20px',
+                        'backgroundColor': '#fff',
+                        'borderRadius': '8px',
+                        'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+                    })
+                ])
+            ], style={
+                'flex': '1',
+                'padding': '30px 30px 30px 0',
+                'backgroundColor': 'rgb(230, 230, 230)'
+            })
+        ], style={
+            'display': 'flex',
+            'maxWidth': '1250px',
+            'margin': '0 auto',
+            'backgroundColor': 'rgb(230, 230, 230)',
+            'minHeight': 'calc(100vh - 100px)'
+        })
     ])
 
 def city_page(city_name):
@@ -137,7 +291,7 @@ def city_page(city_name):
             html.A("Voltar", href="/")
         ], style={'textAlign': 'center'})
 
-    # Dicionário que mapeia os 2 primeiros dígitos do código IBGE para a UF
+    # === CÓDIGO DO MAPA (ORIGINAL) ===
     codigo_para_uf = {
         11: "RO", 12: "AC", 13: "AM", 14: "RR", 15: "PA", 16: "AP", 17: "TO",
         21: "MA", 22: "PI", 23: "CE", 24: "RN", 25: "PB", 26: "PE", 27: "AL", 28: "SE", 29: "BA",
@@ -150,11 +304,9 @@ def city_page(city_name):
     codigo_estado = int(str(citycode)[:2])
     uf = codigo_para_uf.get(codigo_estado, "Desconhecido")
 
-    # Carrega o GeoJSON do estado
-    #with open(f'cityjsons/{uf}.json', 'r', encoding='utf-8') as f:
-    #    estado_geojson = json.load(f)
+    with open(f'cityjsons/{uf}.json', 'r', encoding='utf-8') as f:
+        estado_geojson = json.load(f)
 
-    # Extrai a feature da cidade específica do GeoJSON do estado
     cidade_feature = None
     for feature in estado_geojson['features']:
         if feature['properties']['id'] == str(citycode):
@@ -164,19 +316,16 @@ def city_page(city_name):
             }
             break
 
-    # Configuração do centro do mapa (usando o primeiro ponto do polígono da cidade se disponível)
-    center = dados.get('coordinates', [-15.7, -47.8])  # Fallback para Brasília
+    center = [-15.7, -47.8]  # Fallback
     if cidade_feature and cidade_feature['features'][0]['geometry']['coordinates']:
-        # Pega o primeiro ponto do primeiro polígono (ajuste conforme seu GeoJSON)
         first_point = cidade_feature['features'][0]['geometry']['coordinates'][0][0]
-        center = [first_point[1], first_point[0]]  # Inverte lat/long se necessário
+        center = [first_point[1], first_point[0]]
 
-    # Criação do mapa
     mapa = dl.Map(
         center=center,
-        zoom=8,  # Zoom mais próximo para destacar a região
+        zoom=8,
         children=[
-            dl.TileLayer(),  # Adiciona mapa base
+            dl.TileLayer(),
             dl.GeoJSON(
                 id="estado-geojson",
                 data=estado_geojson,
@@ -192,7 +341,6 @@ def city_page(city_name):
                     "fillOpacity": 0.5
                 }
             ),
-            # Adiciona a cidade destacada se encontrada no GeoJSON do estado
             *([dl.GeoJSON(
                 id="cidade-geojson",
                 data=cidade_feature,
@@ -202,9 +350,8 @@ def city_page(city_name):
                     "fillOpacity": 0.7,
                     "fillColor": "#d62728"
                 },
-                zoomToBounds=True  # Ajusta o zoom para a cidade
+                zoomToBounds=True
             )] if cidade_feature else []),
-            # Adiciona marcador como fallback se não encontrar a cidade no GeoJSON
             *([dl.Marker(
                 position=center,
                 children=[
@@ -214,102 +361,319 @@ def city_page(city_name):
             )] if not cidade_feature else [])
         ],
         style={
-            'height': '60vh',
+            'height': '70vh',  # Aumentado de 60vh para 70vh
             'width': '100%',
-            'margin': '20px 0',
-            'borderRadius': '10px',
-            'boxShadow': '0 4px 8px rgba(0,0,0,0.1)'
+            'borderRadius': '8px',
+            'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
         }
     )
-
+    # === FIM DO CÓDIGO DO MAPA ===
 
     return html.Div([
-        html.A("← Voltar", href="/", style={
-            'margin': '20px',
-            'display': 'inline-block',
-            'textDecoration': 'none',
-            'color': '#0074D9',
-            'fontWeight': 'bold'
+        # Barra superior
+        html.Div([
+            html.A("Voltar", href="/", style={
+                'color': 'white',
+                'fontWeight': 'bold',
+                'textDecoration': 'none',
+                'marginRight': '20px',
+                'position': 'absolute',  # Posiciona absolutamente
+                'left': '20px',
+                'fontFamily': '"Roboto", sans-serif',
+            }),
+            html.Span("Funds2", style={
+                'color': 'white',
+                'fontWeight': 'bold',
+                'fontFamily': '"Roboto", sans-serif',
+                'fontSize': '30px'
+            }),
+            html.Span("Cities", style={
+                'color': 'white',
+                'fontFamily': '"Roboto", sans-serif',
+                'fontSize': '30px'
+            }),
+        ], style={
+            'padding': '15px 30px',
+            'borderBottom': '1px solid #ddd',
+            'backgroundColor': 'rgb(7, 29, 75)',
+            'marginBottom': '0',
+            'position': 'relative',  # Container relativo para posicionamento absoluto interno
+            'display': 'flex',
+            'alignItems': 'center',
+            'justifyContent': 'center'  # Centraliza horizontalmente
         }),
         
+        # Container principal
         html.Div([
-            html.H1(city_name, style={'textAlign': 'center', 'marginBottom': '30px'}),
-            
-            # Layout principal com duas colunas
+            # Coluna de informações (esquerda)
             html.Div([
-                # Coluna esquerda - Informações
-                html.Div([
-                    # Seção de Informações Básicas
-                    html.Div([
-                        html.H2("Informações Básicas"),
-                        html.P(f"Código IBGE: {citycode}"),
-                        html.P(f"Gentílico: {dados['basic']['Gentílico']}"),
-                        html.P(f"Prefeito: {dados['basic']['Prefeito']}"),
-                    ], style={'marginBottom': '30px'}),
-                    
-                    # Seção de Dados Demográficos
-                    html.Div([
-                        html.H2("Dados Demográficos"),
-                        html.P(f"Área: {dados['demographic']['Área']} km²"),
-                        html.P(f"População: {dados['demographic']['População']}"),
-                        html.P(f"Densidade: {dados['demographic']['Densidade']} hab/km²"),
-                        html.P(f"IDHM: {dados['demographic']['IDHM']}"),
-                    ], style={'marginBottom': '30px'}),
-                    
-                    # Seção de Indicadores Econômicos
-                    html.Div([
-                        html.H2("Indicadores Econômicos"),
-                        html.P(f"PIB per capita: R$ {dados['economic']['PIB']}"),
-                        html.P(f"Receitas: R$ {dados['economic']['Receitas']}"),
-                        html.P(f"Despesas: R$ {dados['economic']['Despesas']}")
-                    ])
-                ], style={'flex': '1', 'padding': '0 20px'}),
+                html.H1(city_name, style={
+                    'color': 'rgb(27, 119, 155)',
+                    'fontSize': '28px',
+                    'marginBottom': '10px',
+                    'fontWeight': 'bold',
+                    'fontFamily': '"Roboto", sans-serif',
+                }),
                 
-                # Coluna direita - Mapa
                 html.Div([
-                    mapa
-                ], style={'flex': '1', 'padding': '0 20px'})
+                    html.Span(f"Código do Município: {citycode}", style={
+                        'color': '#555',
+                        'marginRight': '20px',
+                        'fontWeight': '300',
+                        'fontFamily': '"Roboto", sans-serif',
+                    }),
+                    html.Span(f"Gentílico: {dados['basic']['Gentílico'].lower()}", style={
+                        'color': '#555',
+                        'fontWeight': '300',
+                        'fontFamily': '"Roboto", sans-serif',
+                    })
+                ], style={'marginBottom': '15px'}),
+                
+                html.Div([
+                    html.Span(f"Prefeito: {dados['basic']['Prefeito']}", style={
+                        'color': '#333',
+                        'fontFamily': '"Roboto", sans-serif',
+                    })
+                ], style={'marginBottom': '30px'}),
+
+                # Seção FUNDOS
+                html.Div([
+                    html.H2("FUNDOS", style={
+                        'color': 'rgb(27, 119, 155)',
+                        'borderBottom': '2px solid rgb(27, 119, 155)',
+                        'paddingBottom': '5px',
+                        'marginBottom': '20px',
+                        'fontSize': '20px',
+                        'fontWeight': 'bold',
+                        'fontFamily': '"Roboto", sans-serif'
+                    }),
+                    
+                    html.Div([
+                        # Verba Exemplo A
+                        html.Div([
+                            html.P("Verba Exemplo A:", style={
+                                'color': '#555',
+                                'marginBottom': '5px',
+                                'fontWeight': '300',
+                                'fontFamily': '"Roboto", sans-serif',
+                                'fontSize': '20px',
+                                'display': 'inline-block',
+                                'marginRight': '10px'
+                            }),
+                            html.Span(
+                                "✅" if dados['economic']['Receitas'] > 170000 else "❌",
+                                style={
+                                    'color': 'green' if dados['economic']['Receitas'] > 170000 else 'red',
+                                    'fontSize': '20px'
+                                }
+                            ),
+                            html.P("(Receita > R$ 170.000)", style={
+                                'color': '#555',
+                                'fontWeight': '300',
+                                'fontFamily': '"Roboto", sans-serif',
+                                'fontSize': '16px',
+                                'marginTop': '5px'
+                            })
+                        ], style={'marginBottom': '15px'}),
+                        
+                        # Verba Exemplo B
+                        html.Div([
+                            html.P("Verba Exemplo B:", style={
+                                'color': '#555',
+                                'marginBottom': '5px',
+                                'fontWeight': '300',
+                                'fontFamily': '"Roboto", sans-serif',
+                                'fontSize': '20px',
+                                'display': 'inline-block',
+                                'marginRight': '10px'
+                            }),
+                            html.Span(
+                                "✅" if dados['economic']['Despesas'] < 150000 else "❌",
+                                style={
+                                    'color': 'green' if dados['economic']['Despesas'] < 150000 else 'red',
+                                    'fontSize': '20px'
+                                }
+                            ),
+                            html.P("(Despesas < R$ 150.000)", style={
+                                'color': '#555',
+                                'fontWeight': '300',
+                                'fontFamily': '"Roboto", sans-serif',
+                                'fontSize': '16px',
+                                'marginTop': '5px'
+                            })
+                        ])
+                    ])
+                ], style={
+                    'backgroundColor': '#fff',
+                    'padding': '20px',
+                    'borderRadius': '8px',
+                    'marginBottom': '30px',
+                    'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+                }),
+                
+                # Seção POPULAÇÃO
+                html.Div([
+                    html.H2("POPULAÇÃO", style={
+                        'color': 'rgb(27, 119, 155)',
+                        'borderBottom': '2px solid rgb(27, 119, 155)',
+                        'paddingBottom': '5px',
+                        'marginBottom': '20px',
+                        'fontSize': '20px',
+                        'fontWeight': 'bold',
+                        'fontFamily': '"Roboto", sans-serif',
+                    }),
+                    
+                    html.Div([
+                        html.P("População no último censo [2022]:", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontWeight': '300',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'fontSize': '20px'
+                        }),
+                        html.P(f"{format_value(dados['demographic']['População'])} pessoas", style={
+                            'fontWeight': '400',
+                            'fontSize': '18px',
+                            'color': '#333',
+                            'marginBottom': '20px',
+                            'fontFamily': '"Roboto", sans-serif',
+                        }),
+                        
+                        html.P("População estimada [2024]:", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontWeight': '300',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'fontSize': '20px'
+                        }),
+                        html.P(f"{format_value(dados['demographic']['População_Estimada'])} pessoas", style={
+                            'fontWeight': '400',
+                            'fontSize': '18px',
+                            'color': '#333',
+                            'marginBottom': '20px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("Densidade demográfica [2022]:", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontWeight': '300',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'fontSize': '20px'
+                        }),
+                        html.P(f"{format_value(dados['demographic']['Densidade'])} hab/km²", style={
+                            'fontWeight': '400',
+                            'fontSize': '18px',
+                            'color': '#333',
+                            'fontFamily': '"Roboto", sans-serif'
+                        })
+                    ])
+                ], style={
+                    'backgroundColor': '#fff',
+                    'padding': '20px',
+                    'borderRadius': '8px',
+                    'marginBottom': '30px',
+                    'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+                }),
+                
+                # Seção TRABALHO E RENDIMENTO
+                html.Div([
+                    html.H2("TRABALHO E RENDIMENTO", style={
+                        'color': 'rgb(27, 119, 155)',
+                        'borderBottom': '2px solid rgb(27, 119, 155)',
+                        'paddingBottom': '5px',
+                        'marginBottom': '20px',
+                        'fontSize': '20px',
+                        'fontWeight': 'bold',
+                        'fontFamily': '"Roboto", sans-serif'
+                    }),
+                    
+                    html.Div([
+                        html.P("PIB per capita [2021]:", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontWeight': '300',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'fontSize': '20px'
+                        }),
+                        html.P(f"R$ {format_value(dados['economic']['PIB'])}", style={
+                            'fontWeight': '400',
+                            'fontSize': '18px',
+                            'color': '#333',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("Receitas [2024]:", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontWeight': '300',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'fontSize': '20px'
+                        }),
+                        html.P(f"R$ {format_value(dados['economic']['Receitas'])}", style={
+                            'fontWeight': '400',
+                            'fontSize': '18px',
+                            'color': '#333',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("Despesas [2024]:", style={
+                            'color': '#555',
+                            'marginBottom': '5px',
+                            'fontWeight': '300',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'fontSize': '20px'
+                        }),
+                        html.P(f"R$ {format_value(dados['economic']['Despesas'])}", style={
+                            'fontWeight': '400',
+                            'fontSize': '18px',
+                            'color': '#333',
+                            'fontFamily': '"Roboto", sans-serif'
+                        })
+                    ])
+                ], style={
+                    'backgroundColor': '#fff',
+                    'padding': '20px',
+                    'borderRadius': '8px',
+                    'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+                })
             ], style={
-                'display': 'flex',
-                'gap': '30px',
-                'maxWidth': '1400px',
-                'margin': '0 auto'
+                'flex': '1',
+                'padding': '20px 30px 20px 20px',  # Mais padding à esquerda
+                'borderRight': '1px solid #ddd',
+                'backgroundColor': 'rgb(230, 230, 230)',
+                'marginRight': '30px'
+            }),
+            
+            # Coluna do mapa (direita)
+            html.Div([
+                mapa
+            ], style={
+                'flex': '1',
+                'padding': '20px 30px 20px 0',  # Ajuste de padding
+                'minWidth': '0'  # Permite que o mapa ocupe mais espaço
             })
         ], style={
-            'maxWidth': '1400px',
-            'margin': '0 auto',
-            'padding': '20px'
-        }),
-        html.Div(style={'fontFamily': 'Inter, sans-serif', "maxWidth": "600px", "margin": "left"}, children=[
-            html.H2(id="city-info"),
-
-            # Filter eligibility
-            dcc.RadioItems(
-                id="eligibility-filter",
-                options=[
-                    {"label": "Todos os fundos", "value": "all"},
-                    {"label": "Apenas fundos elegíveis", "value": "eligible"},
-                    {"label": "Apenas fundos não elegíveis", "value": "not_eligible"},
-                ],
-                value="all",
-                inline=True,
-                style={"marginTop": "10px"},
-            ),
-
-            html.Div(id="fund-list", style={"marginTop": "20px"}),
-            ])
-        ])
+            'display': 'flex',
+            'maxWidth': '1250px',
+            'margin': '0 auto 30px auto',  # Adicionado margin-bottom de 30px
+            'backgroundColor': 'rgb(230, 230, 230)',
+            'minHeight': 'calc(100vh - 100px)',  # Ajuste conforme necessário
+            'overflow': 'hidden'  # Opcional: evita vazamento do conteúdo
+        })
+    ], style={
+        'paddingBottom': '0px'  # Remove padding extra
+    })
 
 @app.callback(
     Output('url', 'pathname'),
     Input({'type': 'city-btn', 'index': dash.ALL}, 'n_clicks'),
     prevent_initial_call=True
-    # Callback to update city info and funds eligibility
 )
 def navigate(clicks):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return None
+        return dash.no_update
     
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
     city_idx = eval(button_id)['index']
@@ -319,58 +683,12 @@ def navigate(clicks):
     Output('page-content', 'children'),
     Input('url', 'pathname')
 )
-@lru_cache()
 def display_page(pathname):
     if not pathname or pathname == '/':
         return home_page()
     
     city_name = unquote(pathname[1:])
     return city_page(city_name)
-
-# Callback to update city info and funds eligibility
-@app.callback(
-    Output("city-info", "children"),
-    Output("fund-list", "children"),
-    Input("url", "pathname"),
-    Input("eligibility-filter", "value"),
-)
-def update_dashboard(pathname, filter_eligibility):
-    selected_city=unquote(pathname[1:])
-    city = cidades[cidades["Município [-]"] == selected_city].iloc[0]
-
-    # City info text
-    city_text = f"Divída Consolidada: {city['DC [2024]']:,} | Renda Corrente Líquida: {city['RCL [2024]']:,}"
-
-    # Determine eligibility for each fund
-    def check_eligibility(row):
-        pop_ok = city['DC [2024]'] >= row.min_dc
-        gdp_ok = city['RCL [2024]'] <= row.max_rcl
-        return pop_ok and gdp_ok
-
-    funds["eligible"] = funds.apply(check_eligibility, axis=1)
-
-    # Filter funds based on user choice
-    if filter_eligibility == "eligible":
-        filtered = funds[funds["eligible"]]
-    elif filter_eligibility == "not_eligible":
-        filtered = funds[~funds["eligible"]]
-    else:
-        filtered = funds
-
-    # Build fund list elements
-    fund_items = []
-    for _, fund in filtered.iterrows():
-        color = "green" if fund.eligible else "red"
-        fund_items.append(html.Div([
-            html.Strong(fund.fund, style={"color": color}),
-            html.Span(f" (DC Min: {fund.min_dc:,}, RCL Max: {fund.max_rcl:,})",
-                      style={"marginLeft": "8px", "color": "#555"}),
-        ], style={"padding": "6px 0", "borderBottom": "1px solid #eee"}))
-
-    if not fund_items:
-        fund_items = [html.Em("Nenhum fundo corresponde ao filtro selecionado.")]
-
-    return city_text, fund_items
 
 if __name__ == '__main__':
     app.run(debug=True)

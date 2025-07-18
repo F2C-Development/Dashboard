@@ -4,7 +4,9 @@ import dash_leaflet as dl
 import pandas as pd
 import json
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=[
+    {'href': 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap', 'rel': 'stylesheet'}
+])
 server = app.server
 
 # 1. Carregar dados financeiros
@@ -14,95 +16,127 @@ dados = pd.read_csv("siconfi.txt")
 with open('br_states.json', 'r', encoding='utf-8') as f:
     estados_geojson = json.load(f)
 
-# 3. Configuração do Mapa
+# 3. Configuração do Mapa - Centralização ajustada para o Brasil
 mapa = dl.Map(
-    center=[-15.7, -47.8],
+    center=[-14.2350, -51.9253],  # Coordenadas centralizadas no Brasil
     zoom=4,
     children=[
-        #dl.TileLayer(),
+        dl.TileLayer(),
         dl.GeoJSON(
             id="estados-geojson",
             data=estados_geojson,
             format="geojson",
             zoomToBoundsOnClick=True,
-            hoverStyle={
-                "weight": 3,
-                "color": "#666",
-                "fillOpacity": 0.7
-            },
-            style={
-                "weight": 2,
-                "color": "#444",
-                "fillOpacity": 0.5,
-                "fillColor": "#6baed6"
-            }
+            hoverStyle=dict(weight=3, color='#666', fillOpacity=0.7),
+            style=dict(weight=1, color='#4a4a4a', fillOpacity=0.3, fillColor='#6baed6')
         )
     ],
-    style={'height': '80vh', 'width': '100%', 'borderRadius': '10px', 'boxShadow': '0 4px 8px rgba(0,0,0,0.1)', 'background': 'lightgrey'}
+    style={
+        'height': '70vh',
+        'width': '100%',
+        'borderRadius': '8px',
+        'boxShadow': '0 2px 4px rgba(0,0,0,0.1)'
+    }
 )
 
 # 4. Layout do App
 app.layout = html.Div([
-    html.H1("Funds2Cities - Verba Exemplo", style={'fontFamily': 'Inter, sans-serif', 'textAlign': 'center', 'marginBottom': '30px'}),
-    
+    # Barra superior
     html.Div([
-        # Coluna da esquerda - Lista de municípios
+        html.Span("Funds2", style={
+            'color': 'white',
+            'fontWeight': 'bold',
+            'fontFamily': '"Roboto", sans-serif',
+            'fontSize': '30px'
+        }),
+        html.Span("Cities", style={
+            'color': 'white',
+            'fontFamily': '"Roboto", sans-serif',
+            'fontSize': '30px'
+        })
+    ], style={
+        'padding': '15px 30px',
+        'borderBottom': '1px solid #ddd',
+        'backgroundColor': 'rgb(7, 29, 75)',
+        'marginBottom': '0',
+        'display': 'flex',
+        'alignItems': 'center',
+        'justifyContent': 'center'
+    }),
+    
+    # Container principal
+    html.Div([
+        # Coluna de informações (esquerda)
         html.Div([
-            html.Div(id="info-estado", style={
-                'padding': '20px',
-                'backgroundColor': '#f8f9fa',
-                'borderRadius': '10px',
+            html.H2("MUNICÍPIOS - VERBA EXEMPLO A", style={
+                'color': 'rgb(27, 119, 155)',
+                'borderBottom': '2px solid rgb(27, 119, 155)',
+                'paddingBottom': '5px',
                 'marginBottom': '20px',
-                'boxShadow': '0 2px 4px rgba(0,0,0,0.1)',
-                'height': 'fit-content'
+                'fontSize': '20px',
+                'fontWeight': 'bold',
+                'fontFamily': '"Roboto", sans-serif'
             }),
-            html.Div(
-                id="lista-municipios-container",
-                style={
-                    'height': 'calc(65vh - 20px)',  # Subtrai a margem inferior do info-estado
-                    'border': '1px solid #ddd',
-                    'borderRadius': '10px',
-                    'backgroundColor': '#f8f9fa',
-                    'boxShadow': '0 2px 4px rgba(0,0,0,0.1)',
-                    'display': 'flex',
-                    'flexDirection': 'column',
-                    'overflow': 'hidden'  # Garante que nada ultrapasse este container
-                },
-                children=[
-                    html.Div(
-                        id="lista-municipios",
-                        style={
-                            'overflowY': 'auto',
-                            'padding': '15px',
-                            'height': '100%',  # Ocupa todo o espaço disponível
-                            'boxSizing': 'border-box'  # Inclui padding na altura total
-                        }
-                    )
-                ]
-            )
+            
+            html.Div(id="info-estado", style={
+                'backgroundColor': '#fff',
+                'padding': '20px',
+                'borderRadius': '8px',
+                'marginBottom': '20px',
+                'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+            }),
+            
+            html.Div([
+                html.Div(
+                    id="lista-municipios",
+                    style={
+                        'overflowY': 'auto',
+                        'height': '60vh',
+                        'paddingRight': '10px'
+                    }
+                )
+            ], style={
+                'backgroundColor': '#fff',
+                'padding': '20px',
+                'borderRadius': '8px',
+                'boxShadow': '0 1px 3px rgba(0,0,0,0.1)'
+            })
         ], style={
-            'width': '38%',
-            'display': 'inline-block',
-            'verticalAlign': 'top',
-            'padding': '0 15px',
-            'height': '80vh',  # Altura fixa para a coluna esquerda
-            'overflow': 'hidden'  # Garante que nada ultrapasse
+            'flex': '1',
+            'padding': '20px 30px 20px 20px',
+            'borderRight': '1px solid #ddd',
+            'backgroundColor': 'rgb(230, 230, 230)',
+            'marginRight': '30px'
         }),
         
-        # Coluna da direita - Mapa
-        html.Div(mapa, style={
-            'width': '60%',
-            'display': 'inline-block',
-            'verticalAlign': 'top',
-            'padding': '0 15px',
-            'height': '80vh'  # Altura fixa para a coluna direita
+        # Coluna do mapa (direita) - Sem container branco
+        html.Div([
+            html.H2("SELECIONE UM ESTADO", style={
+                'color': 'rgb(27, 119, 155)',
+                'borderBottom': '2px solid rgb(27, 119, 155)',
+                'paddingBottom': '5px',
+                'marginBottom': '15px',
+                'fontSize': '20px',
+                'fontWeight': 'bold',
+                'fontFamily': '"Roboto", sans-serif'
+            }),
+            html.P("Clique em um estado no mapa para ver os municípios elegíveis para a Verba Exemplo A", style={
+                'color': '#555',
+                'fontFamily': '"Roboto", sans-serif',
+                'marginBottom': '15px'
+            }),
+            mapa  # Mapa diretamente no fundo cinza, sem container branco
+        ], style={
+            'flex': '1',
+            'padding': '20px 30px 20px 0',
+            'backgroundColor': 'rgb(230, 230, 230)'
         })
     ], style={
         'display': 'flex',
-        'justifyContent': 'space-between',
-        'padding': '0 20px',
-        'height': '80vh',  # Altura fixa para o container principal
-        'overflow': 'hidden'  # Garante que nada ultrapasse
+        'maxWidth': '1250px',
+        'margin': '0 auto',
+        'backgroundColor': 'rgb(230, 230, 230)',
+        'minHeight': 'calc(100vh - 100px)'
     })
 ])
 
@@ -110,13 +144,23 @@ app.layout = html.Div([
 @app.callback(
     [Output("info-estado", "children"),
      Output("lista-municipios", "children"),
-     Output("estados-geojson", "style")],
+     Output("estados-geojson", "hideout")],
     [Input("estados-geojson", "clickData")],
+    [State("estados-geojson", "hideout")],
     prevent_initial_call=True
 )
-def update_info(click_data):
+def update_info(click_data, current_hideout):
     if not click_data:
-        return "Clique em um estado para ver detalhes", "", dash.no_update
+        return html.Div([
+            html.H2("Selecione um estado", style={
+                'color': 'rgb(27, 119, 155)',
+                'fontFamily': '"Roboto", sans-serif'
+            }),
+            html.P("Clique em um estado no mapa para ver os municípios elegíveis para a Verba Exemplo A", style={
+                'color': '#555',
+                'fontFamily': '"Roboto", sans-serif'
+            })
+        ]), "", dash.no_update
     
     try:
         # Obtém a sigla do estado clicado
@@ -128,16 +172,36 @@ def update_info(click_data):
         
         if municipios.empty:
             return html.Div([
-                html.H2(f"{nome_estado} ({sigla})", style={'fontFamily': 'Inter, sans-serif'}),
-                html.Hr(),
-                html.P("Nenhum município encontrado para este estado.")
+                html.H2(f"{nome_estado} ({sigla})", style={
+                    'color': 'rgb(27, 119, 155)',
+                    'fontFamily': '"Roboto", sans-serif'
+                }),
+                html.Hr(style={'borderColor': '#eee'}),
+                html.P("Nenhum município encontrado para este estado.", style={
+                    'color': '#555',
+                    'fontFamily': '"Roboto", sans-serif'
+                })
             ]), "", dash.no_update
         
         # Info do estado
         info_estado = html.Div([
-            html.H2(f"{nome_estado} ({sigla})", style={'fontFamily': 'Inter, sans-serif', 'color': '#2c3e50'}),
-            html.Hr(),
-            html.P(f"Total de municípios: {len(municipios)}", style={'fontFamily': 'Inter, sans-serif', 'fontSize': '16px'})
+            html.H2(f"{nome_estado} ({sigla})", style={
+                'color': 'rgb(27, 119, 155)',
+                'fontFamily': '"Roboto", sans-serif'
+            }),
+            html.Hr(style={'borderColor': '#eee'}),
+            html.P(f"Total de municípios: {len(municipios)}", style={
+                'color': '#555',
+                'fontFamily': '"Roboto", sans-serif',
+                'fontSize': '16px'
+            }),
+            html.P("Critério para Verba Exemplo A: RCL ≥ R$ 100.000.000,00", style={
+                'color': '#555',
+                'fontFamily': '"Roboto", sans-serif',
+                'fontSize': '14px',
+                'fontWeight': 'bold',
+                'marginTop': '10px'
+            })
         ])
         
         # Lista de todos os municípios com informação de elegibilidade
@@ -150,64 +214,76 @@ def update_info(click_data):
                 except:
                     elegivel = False
             
-            item = html.Li([
-                html.Strong(row['Município [-]'], style={'fontFamily': 'Inter, sans-serif', 'fontSize': '15px'}),
-                html.Br(),
-                (f"DC: R${float(row['DC [-]']):,.2f} | " if 'DC [-]' in row else ""),
-                (f"RCL: R${float(row['RCL [-]']):,.2f}" if 'RCL [-]' in row else ""),
-                html.Br(),
-                html.Span(
-                    "✅ Elegível" if elegivel else "❌ Não elegível",
+            item = html.Div([
+                html.P([
+                    html.Strong(row['Município [-]'], style={
+                        'fontFamily': '"Roboto", sans-serif',
+                        'fontSize': '16px',
+                        'color': '#333',
+                        'marginBottom': '5px'
+                    })
+                ]),
+                html.P([
+                    (f"RCL: R${float(row['RCL [-]']):,.2f}" if 'RCL [-]' in row else "RCL: N/D")
+                ], style={
+                    'color': '#555',
+                    'fontFamily': '"Roboto", sans-serif',
+                    'fontSize': '14px',
+                    'marginBottom': '5px'
+                }),
+                html.P(
+                    "✅ Elegível para Verba Exemplo A" if elegivel else "❌ Não elegível para Verba Exemplo A",
                     style={
-                        'fontFamily': 'Inter, sans-serif',
+                        'fontFamily': '"Roboto", sans-serif',
                         'color': 'green' if elegivel else 'red',
                         'fontWeight': 'bold',
-                        'fontSize': '14px'
+                        'fontSize': '14px',
+                        'marginBottom': '0'
                     }
                 ),
-                html.Hr(style={'margin': '10px 0'})
+                html.Hr(style={
+                    'margin': '15px 0',
+                    'borderColor': '#eee',
+                    'borderWidth': '1px'
+                })
             ], style={
-                'marginBottom': '10px', 
-                'padding': '8px', 
-                'backgroundColor': 'white', 
+                'padding': '15px',
+                'backgroundColor': '#f9f9f9',
                 'borderRadius': '5px',
-                'overflow': 'hidden'
+                'marginBottom': '10px'
             })
             
             lista_itens.append(item)
         
-        lista = html.Ul(lista_itens, style={
-            'listStyleType': 'none',
-            'paddingLeft': '0',
-            'marginTop': '0',
-            'marginBottom': '0'
-        })
+        lista = html.Div(lista_itens)
         
-        # Prepara o novo estilo para destacar o estado selecionado
-        new_style = {
-            "default": {
-                "weight": 2,
-                "color": "#444",
-                "fillOpacity": 0.5,
-                "fillColor": "#6baed6"
-            },
-            "clicked": {
-                "weight": 3,
-                "color": "#222",
-                "fillOpacity": 0.7,
-                "fillColor": "#4CAF50"  # Verde para o estado selecionado
-            },
-            "clickedFeature": sigla
+        # Prepara o novo estilo para destacar apenas o estado selecionado
+        new_hideout = {
+            "clickedFeature": sigla,
+            "style": {
+                "clicked": {
+                    "weight": 2,
+                    "color": "#d62728",
+                    "fillOpacity": 0.7,
+                    "fillColor": "#d62728"
+                }
+            }
         }
         
-        return info_estado, lista, new_style
+        return info_estado, lista, new_hideout
     
     except Exception as e:
         print(f"Erro: {str(e)}")
         return html.Div([
-            html.H2("Erro"),
-            html.Hr(),
-            html.P(f"Ocorreu um erro ao processar os dados: {str(e)}")
+            html.H2("Erro", style={
+                'color': 'rgb(27, 119, 155)',
+                'fontFamily': '"Roboto", sans-serif'
+            }),
+            html.Hr(style={'borderColor': '#eee'}),
+            html.P(f"Ocorreu um erro ao processar os dados: {str(e)}", style={
+                'color': '#555',
+                'fontFamily': '"Roboto", sans-serif'
+            })
         ]), "", dash.no_update
 
 if __name__ == '__main__':
