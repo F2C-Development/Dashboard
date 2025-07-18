@@ -9,6 +9,7 @@ import json
 
 import datetime
 from data_export import cities_list, cities_dict
+from functools import lru_cache
 
 
 '''
@@ -74,6 +75,17 @@ def load_data():
 CITIES_LIST, CITIES_DATA = load_data()
 '''
 
+
+import os
+from glob import glob
+
+GEOJSONS = {}
+for path in glob("cityjsons/*.json"):
+    uf = os.path.basename(path).split(".")[0]
+    with open(path, encoding="utf-8") as f:
+        GEOJSONS[uf] = json.load(f)
+estado_geojson = GEOJSONS.get(uf)
+
 funds = pd.DataFrame([
     {"fund": "Fundo A", "min_dc": 10000000000, "max_rcl": 100000000000},
     {"fund": "Fundo B", "min_dc": 20000000000, "max_rcl": 100000000000},
@@ -96,6 +108,8 @@ def format_value(value):
 
 ## 4. Aplicativo Dash Otimizado
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
+#app = dash.Dash(__name__, suppress_callback_exceptions=True, service_worker=True)  # Habilita PWA
+#app.enable_dev_tools(service_worker=True)
 server = app.server
 
 app.layout = html.Div([
@@ -137,8 +151,8 @@ def city_page(city_name):
     uf = codigo_para_uf.get(codigo_estado, "Desconhecido")
 
     # Carrega o GeoJSON do estado
-    with open(f'cityjsons/{uf}.json', 'r', encoding='utf-8') as f:
-        estado_geojson = json.load(f)
+    #with open(f'cityjsons/{uf}.json', 'r', encoding='utf-8') as f:
+    #    estado_geojson = json.load(f)
 
     # Extrai a feature da cidade específica do GeoJSON do estado
     cidade_feature = None
@@ -305,6 +319,7 @@ def navigate(clicks):
     Output('page-content', 'children'),
     Input('url', 'pathname')
 )
+@lru_cache()
 def display_page(pathname):
     if not pathname or pathname == '/':
         return home_page()
