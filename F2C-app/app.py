@@ -698,4 +698,4 @@ def display_page(pathname):
     return city_page(city_name)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
