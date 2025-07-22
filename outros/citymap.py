@@ -210,7 +210,7 @@ def update_info(click_data, current_hideout):
             elegivel = False
             if 'RCL [-]' in row:
                 try:
-                    elegivel = float(row['RCL [-]']) >= 100000000000
+                    elegivel = float(row['RCL [-]']) >= 100000000
                 except:
                     elegivel = False
             

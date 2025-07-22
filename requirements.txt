@@ -1,3 +1,0 @@
-pandas==2.3.1
-dash==3.1.1
-dash-leaflet==1.1.3
