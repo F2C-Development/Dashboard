@@ -16,9 +16,9 @@ dados = pd.read_csv("siconfi.txt")
 with open('br_states.json', 'r', encoding='utf-8') as f:
     estados_geojson = json.load(f)
 
-# 3. Configuração do Mapa - Centralização ajustada para o Brasil
+# 3. Configuração do Mapa
 mapa = dl.Map(
-    center=[-14.2350, -51.9253],  # Coordenadas centralizadas no Brasil
+    center=[-14.2350, -51.9253],
     zoom=4,
     children=[
         dl.TileLayer(),
@@ -109,7 +109,7 @@ app.layout = html.Div([
             'marginRight': '30px'
         }),
         
-        # Coluna do mapa (direita) - Sem container branco
+        # Coluna do mapa (direita)
         html.Div([
             html.H2("SELECIONE UM ESTADO", style={
                 'color': 'rgb(27, 119, 155)',
@@ -125,7 +125,7 @@ app.layout = html.Div([
                 'fontFamily': '"Roboto", sans-serif',
                 'marginBottom': '15px'
             }),
-            mapa  # Mapa diretamente no fundo cinza, sem container branco
+            mapa
         ], style={
             'flex': '1',
             'padding': '20px 30px 20px 0',
@@ -146,145 +146,129 @@ app.layout = html.Div([
      Output("lista-municipios", "children"),
      Output("estados-geojson", "hideout")],
     [Input("estados-geojson", "clickData")],
-    [State("estados-geojson", "hideout")],
     prevent_initial_call=True
 )
-def update_info(click_data, current_hideout):
+def update_info(click_data):
     if not click_data:
-        return html.Div([
-            html.H2("Selecione um estado", style={
-                'color': 'rgb(27, 119, 155)',
-                'fontFamily': '"Roboto", sans-serif'
-            }),
-            html.P("Clique em um estado no mapa para ver os municípios elegíveis para a Verba Exemplo A", style={
+        return (
+            html.Div("Selecione um estado no mapa para ver os municípios", style={
                 'color': '#555',
                 'fontFamily': '"Roboto", sans-serif'
-            })
-        ]), "", dash.no_update
+            }),
+            "",
+            dash.no_update
+        )
     
     try:
         # Obtém a sigla do estado clicado
         sigla = click_data['id']
-        nome_estado = click_data['geometry_name']
+        nome_estado = click_data['properties']['name'] if 'properties' in click_data and 'name' in click_data['properties'] else sigla
         
         # Filtra municípios do estado
-        municipios = dados[dados['UF [-]'] == sigla].sort_values('Município [-]')
+        municipios = dados[dados['UF [-]'] == sigla].copy()
         
-        if municipios.empty:
-            return html.Div([
-                html.H2(f"{nome_estado} ({sigla})", style={
-                    'color': 'rgb(27, 119, 155)',
-                    'fontFamily': '"Roboto", sans-serif'
-                }),
-                html.Hr(style={'borderColor': '#eee'}),
-                html.P("Nenhum município encontrado para este estado.", style={
-                    'color': '#555',
-                    'fontFamily': '"Roboto", sans-serif'
-                })
-            ]), "", dash.no_update
+        # Verifica elegibilidade
+        municipios['Elegivel'] = municipios['RCL [2024]'].apply(
+            lambda x: float(x) >= 100000000 if pd.notnull(x) and str(x).replace('.','').isdigit() else False
+        )
         
-        # Info do estado
+        # Ordena por elegibilidade (elegíveis primeiro) e depois por nome
+        municipios = municipios.sort_values(['Elegivel', 'Município [-]'], ascending=[False, True])
+        
+        # Cria info do estado
         info_estado = html.Div([
-            html.H2(f"{nome_estado} ({sigla})", style={
+            html.H3(f"{nome_estado} ({sigla})", style={
                 'color': 'rgb(27, 119, 155)',
-                'fontFamily': '"Roboto", sans-serif'
+                'fontFamily': '"Roboto", sans-serif',
+                'marginBottom': '10px'
             }),
-            html.Hr(style={'borderColor': '#eee'}),
             html.P(f"Total de municípios: {len(municipios)}", style={
                 'color': '#555',
-                'fontFamily': '"Roboto", sans-serif',
-                'fontSize': '16px'
+                'fontFamily': '"Roboto", sans-serif'
             }),
-            html.P("Critério para Verba Exemplo A: RCL ≥ R$ 100.000.000,00", style={
-                'color': '#555',
+            html.P(f"Municípios elegíveis: {sum(municipios['Elegivel'])}", style={
+                'color': 'green',
                 'fontFamily': '"Roboto", sans-serif',
-                'fontSize': '14px',
-                'fontWeight': 'bold',
-                'marginTop': '10px'
+                'fontWeight': 'bold'
             })
         ])
         
-        # Lista de todos os municípios com informação de elegibilidade
-        lista_itens = []
+        # Cria lista de municípios organizada
+        municipios_elegiveis = []
+        municipios_nao_elegiveis = []
+        
         for _, row in municipios.iterrows():
-            elegivel = False
-            if 'RCL [-]' in row:
-                try:
-                    elegivel = float(row['RCL [-]']) >= 100000000
-                except:
-                    elegivel = False
-            
             item = html.Div([
-                html.P([
-                    html.Strong(row['Município [-]'], style={
-                        'fontFamily': '"Roboto", sans-serif',
-                        'fontSize': '16px',
-                        'color': '#333',
-                        'marginBottom': '5px'
-                    })
-                ]),
-                html.P([
-                    (f"RCL: R${float(row['RCL [-]']):,.2f}" if 'RCL [-]' in row else "RCL: N/D")
-                ], style={
-                    'color': '#555',
+                html.P(html.Strong(row['Município [-]']), style={
                     'fontFamily': '"Roboto", sans-serif',
-                    'fontSize': '14px',
                     'marginBottom': '5px'
                 }),
+                html.P(f"RCL: R${float(row['RCL [2024]']):,.2f}" if pd.notnull(row['RCL [2024]']) else "RCL: N/D", 
+                      style={'color': '#555', 'fontFamily': '"Roboto", sans-serif'}),
                 html.P(
-                    "✅ Elegível para Verba Exemplo A" if elegivel else "❌ Não elegível para Verba Exemplo A",
+                    "✅ Elegível" if row['Elegivel'] else "❌ Não elegível",
                     style={
-                        'fontFamily': '"Roboto", sans-serif',
-                        'color': 'green' if elegivel else 'red',
+                        'color': 'green' if row['Elegivel'] else 'red',
                         'fontWeight': 'bold',
-                        'fontSize': '14px',
-                        'marginBottom': '0'
+                        'fontFamily': '"Roboto", sans-serif'
                     }
                 ),
-                html.Hr(style={
-                    'margin': '15px 0',
-                    'borderColor': '#eee',
-                    'borderWidth': '1px'
-                })
+                html.Hr(style={'margin': '15px 0', 'borderColor': '#eee'})
             ], style={
                 'padding': '15px',
-                'backgroundColor': '#f9f9f9',
-                'borderRadius': '5px',
+                'backgroundColor': '#f8f8f8',
+                'borderLeft': '4px solid green' if row['Elegivel'] else '4px solid red',
                 'marginBottom': '10px'
             })
             
-            lista_itens.append(item)
+            if row['Elegivel']:
+                municipios_elegiveis.append(item)
+            else:
+                municipios_nao_elegiveis.append(item)
         
-        lista = html.Div(lista_itens)
+        # Monta a lista final com seções
+        lista_final = []
         
-        # Prepara o novo estilo para destacar apenas o estado selecionado
+        if municipios_elegiveis:
+            lista_final.append(html.H4("Municípios Elegíveis", style={
+                'color': 'green',
+                'fontFamily': '"Roboto", sans-serif',
+                'marginTop': '10px'
+            }))
+            lista_final.extend(municipios_elegiveis)
+        
+        if municipios_nao_elegiveis:
+            lista_final.append(html.H4("Municípios Não Elegíveis", style={
+                'color': 'red',
+                'fontFamily': '"Roboto", sans-serif',
+                'marginTop': '20px' if municipios_elegiveis else '10px'
+            }))
+            lista_final.extend(municipios_nao_elegiveis)
+        
+        # Prepara o estilo do mapa
         new_hideout = {
             "clickedFeature": sigla,
             "style": {
                 "clicked": {
                     "weight": 2,
                     "color": "#d62728",
-                    "fillOpacity": 0.7,
-                    "fillColor": "#d62728"
+                    "fillOpacity": 0.7
                 }
             }
         }
         
-        return info_estado, lista, new_hideout
+        return info_estado, html.Div(lista_final), new_hideout
     
     except Exception as e:
         print(f"Erro: {str(e)}")
-        return html.Div([
-            html.H2("Erro", style={
-                'color': 'rgb(27, 119, 155)',
+        return (
+            html.Div("Ocorreu um erro ao carregar os dados", style={
+                'color': 'red',
                 'fontFamily': '"Roboto", sans-serif'
             }),
-            html.Hr(style={'borderColor': '#eee'}),
-            html.P(f"Ocorreu um erro ao processar os dados: {str(e)}", style={
-                'color': '#555',
-                'fontFamily': '"Roboto", sans-serif'
-            })
-        ]), "", dash.no_update
+            "",
+            dash.no_update
+        )
 
 if __name__ == '__main__':
     app.run(debug=True)

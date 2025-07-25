@@ -1,12 +1,11 @@
 import dash
-from dash import html, dcc, Input, Output, callback
+from dash import html, dcc, Input, Output, callback, State
 import pandas as pd
 from urllib.parse import unquote
 import json
 import dash_leaflet as dl
-#from data_export import cities_dict,cities_list
 
-## 1. Função de Carregamento de Dados (Original)
+## 1. Função de Carregamento de Dados (Modificada para incluir estados)
 def load_data():
     df = pd.read_csv('ibge.txt')
     
@@ -32,35 +31,54 @@ def load_data():
         else:
             df[col] = df[col].astype(dtype)
     
-    cities_list = df['Município [-]'].unique().tolist()
-    cities_data = {}
+    # Código para mapear estado a partir do código do município
+    codigo_para_uf = {
+        11: "RO", 12: "AC", 13: "AM", 14: "RR", 15: "PA", 16: "AP", 17: "TO",
+        21: "MA", 22: "PI", 23: "CE", 24: "RN", 25: "PB", 26: "PE", 27: "AL", 28: "SE", 29: "BA",
+        31: "MG", 32: "ES", 33: "RJ", 35: "SP",
+        41: "PR", 42: "SC", 43: "RS",
+        50: "MS", 51: "MT", 52: "GO", 53: "DF"
+    }
     
-    for city in cities_list:
-        city_data = df[df['Município [-]'] == city].iloc[0]
+    # Adiciona coluna de estado
+    df['Estado'] = df['Código [-]'].apply(lambda x: codigo_para_uf.get(int(str(x)[:2]), "Desconhecido"))
+    
+    # Lista de estados disponíveis
+    states_list = sorted(df['Estado'].unique().tolist())
+    
+    # Dicionário de cidades por estado
+    cities_by_state = {}
+    for state in states_list:
+        cities_by_state[state] = df[df['Estado'] == state]['Município [-]'].unique().tolist()
+    
+    cities_data = {}
+    for _, row in df.iterrows():
+        city = row['Município [-]']
         cities_data[city] = {
             'basic': {
-                'Código': city_data['Código [-]'],
-                'Gentílico': city_data['Gentílico [-]'],
-                'Prefeito': city_data['Prefeito [2025]']
+                'Código': row['Código [-]'],
+                'Gentílico': row['Gentílico [-]'],
+                'Prefeito': row['Prefeito [2025]'],
+                'Estado': row['Estado']
             },
             'demographic': {
-                'Área': city_data['Área Territorial - km² [2024]'],
-                'População': city_data['População no último censo - pessoas [2022]'],
-                'Densidade': city_data['Densidade demográfica - hab/km² [2022]'],
-                'População_Estimada': city_data['População estimada - pessoas [2024]'],
-                'IDHM': city_data['IDHM (Índice de desenvolvimento humano municipal) [2010]']
+                'Área': row['Área Territorial - km² [2024]'],
+                'População': row['População no último censo - pessoas [2022]'],
+                'Densidade': row['Densidade demográfica - hab/km² [2022]'],
+                'População_Estimada': row['População estimada - pessoas [2024]'],
+                'IDHM': row['IDHM (Índice de desenvolvimento humano municipal) [2010]']
             },
             'economic': {
-                'PIB': city_data['PIB per capita - R$ [2021]'],
-                'Receitas': city_data['Total de receitas brutas realizadas - R$ [2024]'],
-                'Despesas': city_data['Total de despesas brutas empenhadas - R$ [2024]']
+                'PIB': row['PIB per capita - R$ [2021]'],
+                'Receitas': row['Total de receitas brutas realizadas - R$ [2024]'],
+                'Despesas': row['Total de despesas brutas empenhadas - R$ [2024]']
             }
         }
     
-    return cities_list, cities_data
+    return states_list, cities_by_state, cities_data
 
 ## 2. Carrega os dados
-CITIES_LIST, CITIES_DATA = load_data()
+STATES_LIST, CITIES_BY_STATE, CITIES_DATA = load_data()
 
 ## 3. Função de formatação (Original)
 def format_value(value):
@@ -122,6 +140,24 @@ def home_page():
         html.Div([
             # Coluna da lista de cidades (esquerda)
             html.Div([
+                html.H1("Selecione um Estado", style={
+                    'color': 'rgb(27, 119, 155)',
+                    'fontSize': '28px',
+                    'marginBottom': '20px',
+                    'fontWeight': 'bold',
+                    'fontFamily': '"Roboto", sans-serif',
+                }),
+                
+                dcc.Dropdown(
+                    id='state-dropdown',
+                    options=[{'label': state, 'value': state} for state in STATES_LIST],
+                    placeholder="Selecione um estado...",
+                    style={
+                        'marginBottom': '20px',
+                        'fontFamily': '"Roboto", sans-serif'
+                    }
+                ),
+                
                 html.H1("Selecione uma Cidade", style={
                     'color': 'rgb(27, 119, 155)',
                     'fontSize': '28px',
@@ -131,31 +167,9 @@ def home_page():
                 }),
                 
                 html.Div(
-                    [html.Button(city, 
-                                id={'type': 'city-btn', 'index': i},
-                                style={
-                                    'display': 'block',
-                                    'width': '100%',
-                                    'padding': '12px 15px',
-                                    'margin': '8px 0',
-                                    'border': '1px solid #ddd',
-                                    'backgroundColor': '#fff',
-                                    'color': '#333',
-                                    'fontWeight': '400',
-                                    'borderRadius': '4px',
-                                    'cursor': 'pointer',
-                                    'textAlign': 'left',
-                                    'transition': 'all 0.3s',
-                                    'fontFamily': '"Roboto", sans-serif',
-                                    ':hover': {
-                                        'backgroundColor': '#f0f7ff',
-                                        'borderColor': '#1351B4',
-                                        'transform': 'translateY(-2px)'
-                                    }
-                                })
-                     for i, city in enumerate(CITIES_LIST)],
+                    id='city-buttons-container',
                     style={
-                        'maxHeight': '70vh',
+                        'maxHeight': '60vh',
                         'overflowY': 'auto',
                         'paddingRight': '10px'
                     }
@@ -182,35 +196,42 @@ def home_page():
                     }),
                     
                     html.Div([
-                        html.P("1. Selecione uma cidade na lista ao lado", style={
+                        html.P("1. Selecione um estado no menu suspenso", style={
                             'color': '#555',
                             'marginBottom': '15px',
                             'fontSize': '18px',
                             'fontFamily': '"Roboto", sans-serif'
                         }),
                         
-                        html.P("2. Visualize os dados completos do município", style={
+                        html.P("2. Selecione uma cidade na lista que aparecer", style={
                             'color': '#555',
                             'marginBottom': '15px',
                             'fontSize': '18px',
                             'fontFamily': '"Roboto", sans-serif'
                         }),
                         
-                        html.P("3. Verifique os fundos disponíveis para a cidade", style={
+                        html.P("3. Visualize os dados completos do município", style={
                             'color': '#555',
                             'marginBottom': '15px',
                             'fontSize': '18px',
                             'fontFamily': '"Roboto", sans-serif'
                         }),
                         
-                        html.P("4. Os ícones ✅ indicam verbas que a cidade se enquadra", style={
+                        html.P("4. Verifique os fundos disponíveis para a cidade", style={
+                            'color': '#555',
+                            'marginBottom': '15px',
+                            'fontSize': '18px',
+                            'fontFamily': '"Roboto", sans-serif'
+                        }),
+                        
+                        html.P("5. Os ícones ✅ indicam verbas que a cidade se enquadra", style={
                             'color': '#555',
                             'marginBottom': '5px',
                             'fontSize': '18px',
                             'fontFamily': '"Roboto", sans-serif'
                         }),
                         
-                        html.P("5. Os ícones ❌ indicam verbas não disponíveis", style={
+                        html.P("6. Os ícones ❌ indicam verbas não disponíveis", style={
                             'color': '#555',
                             'fontSize': '18px',
                             'fontFamily': '"Roboto", sans-serif'
@@ -672,6 +693,46 @@ def city_page(city_name):
         'paddingBottom': '0px'  # Remove padding extra
     })
 
+# Novo callback para atualizar a lista de cidades com base no estado selecionado
+# Callback para atualizar a lista de cidades
+@app.callback(
+    Output('city-buttons-container', 'children'),
+    Input('state-dropdown', 'value')
+)
+def update_city_buttons(selected_state):
+    if not selected_state:
+        return []
+    
+    cities = CITIES_BY_STATE.get(selected_state, [])
+    
+    return [html.Button(
+        city, 
+        id={'type': 'city-btn', 'index': city},
+        n_clicks=0,
+        style={
+            'display': 'block',
+            'width': '100%',
+            'padding': '12px 15px',
+            'margin': '8px 0',
+            'border': '1px solid #ddd',
+            'backgroundColor': '#fff',
+            'color': '#333',
+            'fontWeight': '400',
+            'borderRadius': '4px',
+            'cursor': 'pointer',
+            'textAlign': 'left',
+            'transition': 'all 0.3s',
+            'fontFamily': '"Roboto", sans-serif',
+            ':hover': {
+                'backgroundColor': '#f0f7ff',
+                'borderColor': '#1351B4',
+                'transform': 'translateY(-2px)'
+            }
+        })
+        for city in cities]
+
+# Callback de navegação simplificado
+# Callback para navegação corrigido
 @app.callback(
     Output('url', 'pathname'),
     Input({'type': 'city-btn', 'index': dash.ALL}, 'n_clicks'),
@@ -679,12 +740,19 @@ def city_page(city_name):
 )
 def navigate(clicks):
     ctx = dash.callback_context
-    if not ctx.triggered:
+    if not ctx.triggered or not any(clicks):
         return dash.no_update
     
+    # Encontra qual botão foi clicado
     button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    city_idx = eval(button_id)['index']
-    return f'/{CITIES_LIST[city_idx]}'
+    
+    try:
+        # Converte a string do ID para dicionário
+        button_id_dict = eval(button_id)
+        city_name = button_id_dict['index']
+        return f'/{city_name}'
+    except:
+        return dash.no_update
 
 @app.callback(
     Output('page-content', 'children'),
